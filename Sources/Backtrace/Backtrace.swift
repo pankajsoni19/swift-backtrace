@@ -9,6 +9,10 @@ typealias CBacktraceSyminfoCallback = @convention(c) (_ data: UnsafeMutableRawPo
 
 private let state = backtrace_create_state(CommandLine.arguments[0], /* BACKTRACE_SUPPORTS_THREADS */ 1, nil, nil)
 
+public typealias BACKTRACE_LOG_CALLBACK = (_: String) -> ()
+
+public var BACK_TRACE_LOG_CALLBACK_HANDLER: BACKTRACE_LOG_CALLBACK? = nil
+
 private let fullCallback: CBacktraceFullCallback? = {
     data, pc, filename, lineno, function in
 
@@ -29,7 +33,12 @@ private let fullCallback: CBacktraceFullCallback? = {
         str.append(String(lineno))
     }
     str.append("\n")
-
+    
+    if let handler = BACK_TRACE_LOG_CALLBACK_HANDLER {
+        handler(str)
+        return 0
+    }
+    
     str.withCString { ptr in
         _ = withVaList([ptr]) { vaList in
             vfprintf(stderr, "%s", vaList)
@@ -52,6 +61,9 @@ public enum Backtrace {
         setupHandler(signal: SIGILL) { _ in
             backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
         }
+        setupHandler(signal: SIGSEGV) { _ in
+            backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
+        }
     }
 
     public static func print() {
@@ -72,7 +84,8 @@ public enum Backtrace {
 }
 #else
 public enum Backtrace {
-    public static func install() { 
+    public static func install() {
+       
     }
 
     public static func print() {
