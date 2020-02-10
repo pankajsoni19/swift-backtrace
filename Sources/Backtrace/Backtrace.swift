@@ -1,3 +1,7 @@
+
+public typealias BACKTRACE_LOG_CALLBACK = (_: String) -> ()
+public var BACK_TRACE_LOG_CALLBACK_HANDLER: BACKTRACE_LOG_CALLBACK? = nil
+
 #if os(Linux)
 import Glibc
 import CBacktrace
@@ -8,10 +12,6 @@ typealias CBacktraceSimpleCallback = @convention(c) (_ data: UnsafeMutableRawPoi
 typealias CBacktraceSyminfoCallback = @convention(c) (_ data: UnsafeMutableRawPointer?, _ pc: UInt, _ filename: UnsafePointer<CChar>?, _ symval: UInt, _ symsize: UInt) -> Void
 
 private let state = backtrace_create_state(CommandLine.arguments[0], /* BACKTRACE_SUPPORTS_THREADS */ 1, nil, nil)
-
-public typealias BACKTRACE_LOG_CALLBACK = (_: String) -> ()
-
-public var BACK_TRACE_LOG_CALLBACK_HANDLER: BACKTRACE_LOG_CALLBACK? = nil
 
 private let fullCallback: CBacktraceFullCallback? = {
     data, pc, filename, lineno, function in
