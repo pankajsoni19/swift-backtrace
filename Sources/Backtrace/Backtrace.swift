@@ -1,17 +1,15 @@
 
-public typealias BACKTRACE_LOG_CALLBACK = (_: String) -> ()
-public var BACK_TRACE_LOG_CALLBACK_HANDLER: BACKTRACE_LOG_CALLBACK? = nil
-
 #if os(Linux)
 import Glibc
 import CBacktrace
+
+private let state = backtrace_create_state(CommandLine.arguments[0], /* BACKTRACE_SUPPORTS_THREADS */ 1, nil, nil)
+#endif
 
 typealias CBacktraceErrorCallback = @convention(c) (_ data: UnsafeMutableRawPointer?, _ msg: UnsafePointer<CChar>?, _ errnum: CInt) -> Void
 typealias CBacktraceFullCallback = @convention(c) (_ data: UnsafeMutableRawPointer?, _ pc: UInt, _ filename: UnsafePointer<CChar>?, _ lineno: CInt, _ function: UnsafePointer<CChar>?) -> CInt
 typealias CBacktraceSimpleCallback = @convention(c) (_ data: UnsafeMutableRawPointer?, _ pc: UInt) -> CInt
 typealias CBacktraceSyminfoCallback = @convention(c) (_ data: UnsafeMutableRawPointer?, _ pc: UInt, _ filename: UnsafePointer<CChar>?, _ symval: UInt, _ symsize: UInt) -> Void
-
-private let state = backtrace_create_state(CommandLine.arguments[0], /* BACKTRACE_SUPPORTS_THREADS */ 1, nil, nil)
 
 private let fullCallback: CBacktraceFullCallback? = {
     data, pc, filename, lineno, function in
@@ -34,42 +32,45 @@ private let fullCallback: CBacktraceFullCallback? = {
     }
     str.append("\n")
     
-    if let handler = BACK_TRACE_LOG_CALLBACK_HANDLER {
-        handler(str)
-        return 0
-    }
+    Backtrace.log(str: str)
     
-    str.withCString { ptr in
-        _ = withVaList([ptr]) { vaList in
-            vfprintf(stderr, "%s", vaList)
-        }
-    }
     return 0
 }
 
 private let errorCallback: CBacktraceErrorCallback? = {
     data, msg, errnum in
     if let msg = msg {
-        _ = withVaList([msg]) { vaList in
-            vfprintf(stderr, "%s\n", vaList)
-        }
+        Backtrace.log(str: String(cString: msg))
     }
 }
 
 public enum Backtrace {
+    
+    public typealias BACKTRACE_LOG_CALLBACK = (_: String) -> ()
+    public static var BACK_TRACE_LOG_CALLBACK_HANDLER: BACKTRACE_LOG_CALLBACK? = nil
+
+    public static func log(str: String) {
+        BACK_TRACE_LOG_CALLBACK_HANDLER?(str)
+    }
+    
     public static func install() {
+        #if os(Linux)
         setupHandler(signal: SIGILL) { _ in
             backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
         }
         setupHandler(signal: SIGSEGV) { _ in
             backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
         }
+        #endif
     }
 
     public static func print() {
+        #if os(Linux)
         backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
+        #endif
     }
 
+    #if os(Linux)
     private static func setupHandler(signal: Int32, handler: @escaping @convention(c) (CInt) -> Void) {
         typealias sigaction_t = sigaction
         let sa_flags = CInt(SA_NODEFER) | CInt(bitPattern: CUnsignedInt(SA_RESETHAND))
@@ -81,14 +82,5 @@ public enum Backtrace {
             sigaction(signal, ptr, nil)
         }
     }
+    #endif
 }
-#else
-public enum Backtrace {
-    public static func install() {
-       
-    }
-
-    public static func print() {
-    }
-}
-#endif
