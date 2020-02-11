@@ -55,11 +55,10 @@ public enum Backtrace {
     
     public static func install() {
         #if os(Linux)
-        setupHandler(signal: SIGILL) { _ in
-            backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
-        }
-        setupHandler(signal: SIGSEGV) { _ in
-            backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
+        [SIGTERM, SIGSEGV, SIGINT, SIGILL, SIGABRT, SIGFPE].forEach { (SIGNAL_ID) in
+            setupHandler(signal: SIGNAL_ID) { _ in
+                backtrace_full(state, /* skip */ 0, fullCallback, errorCallback, nil)
+            }
         }
         #endif
     }
